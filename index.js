@@ -56,7 +56,7 @@ const sendMail = (email, token, res,) => {
     };
     transporter.sendMail(mailOptions, (err, info) => {
         if (err) {
-            res.send({ err: 'something went wrong' });
+            res.status(400).json({ err: '5.something went wrong' });
         }
         if (info) {
             res.send({ success: 'check your email to verify your account' });
@@ -84,19 +84,19 @@ app.post('/signup', (req, res) => {
         const token = jwt.sign({ mail: email, username: username }, process.env.SECRET_KEY);
         connection.query('SELECT * FROM users WHERE email=?', [email], (err, result) => {
             if (err) {
-                res.send({ err: 'something went wrong' });
+                res.status(400).json({ err: '1.something went wrong' });
             }
             if (result.length > 0) {
                 if (result[0].isVerified === 0) {
                     sendMail(email, token, res);
                 } else {
-                    res.send({ err: 'something went wrong' });
+                    res.status(400).json({ err: '2.something went wrong' });
                 }
             }
             if (result.length === 0) {
                 connection.query('INSERT INTO users (username,email,password) VALUES (?,?,?)', [username, email, hash], (err, result) => {
                     if (err) {
-                        res.send({ err: 'something went wrong' });
+                        res.status(400).json({ err: '3.something went wrong' });
                     }
                     if (result) {
                         sendMail(email, token, res);
@@ -105,7 +105,7 @@ app.post('/signup', (req, res) => {
             }
         });
     }else{
-        res.send({ err: 'something went wrong' });
+        res.status(400).json({ err: '4.something went wrong' });
     }
 });
 
@@ -121,22 +121,22 @@ app.put('/verify', (req, res) => {
     if (token && token !== null && token !== undefined && token !== '') {
         jwt.verify(token, process.env.SECRET_KEY, (err, result) => {
             if (err) {
-                res.send({ err: 'something went wrong' });
+                res.status(400).json({ err: 'something went wrong' });
             }
             if (result) {
                 connection.query('UPDATE users SET isVerified=? WHERE email=?', [1, result.mail], (err, result) => {
                     if (err) {
-                        res.send({ err: 'something went wrong' });
+                        res.status(400).json({ err: 'something went wrong' });
                     }
                     if (result) {
                         res.send({ success: 'your account is verified' });
-                        
+
                     }
                 });
             }
         });
     } else {
-        res.send({ err: 'something went wrong' });
+        res.status(400).json({ err: 'something went wrong' });
     }
 });
 
@@ -154,7 +154,7 @@ app.post('/login', (req, res) => {
     if ((email && email !== null && email !== undefined && email !== '') && (password && password !== null && password !== undefined && password !== '')) {
         connection.query('SELECT * FROM users WHERE email=?', [email], (err, result) => {
             if (err) {
-                res.send({ err: 'something went wrong' });
+                res.status(400).json({ err: '1.something went wrong' });
             }
             if (result.length > 0) {
                 if (result[0].isVerified === 0) {
@@ -164,18 +164,18 @@ app.post('/login', (req, res) => {
                     const isMatch = bcrypt.compareSync(password, result[0].password);
                     if (isMatch) {
                         const token = jwt.sign({ mail: email, username: result[0].username }, process.env.SECRET_KEY);
-                        res.send({ success: token });
+                        res.status(200).json({ token: token });
                     } else {
-                        res.send({ err: 'something went wrong' });
+                        res.status(400).json({ err: '2.something went wrong' });
                     }
                 }
             }
             if (result.length === 0) {
-                res.send({ err: 'something went wrong' });
+                res.status(400).json({ err: '3.something went wrong' });
             }
         });
     } else {
-        res.send({ err: 'something went wrong' });
+        res.status(400).json({ err: '4.something went wrong' });
     }
 });
 
