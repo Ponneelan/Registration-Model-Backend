@@ -47,14 +47,14 @@ transporter.verify((err, success) => {
 
 
 //create function to sent mail to user using nodemailer transporter
-const sendMail = (email, token, res,) => {
+const sendVerificationMail = (email, token, res,) => {
     const mailOptions = {
         from: process.env.EMAIL,
         to: email,
         subject: 'Verify your account',
         html: `<h1>Click on the link to verify your account</h1><br/> <p>${process.env.DOMAIN}/verify/?token=${token}</p>`,
     };
-    transporter.sendMail(mailOptions, (err, info) => {
+    transporter.sendVerificationMail(mailOptions, (err, info) => {
         if (err) {
             res.status(400).json({ err: '5.something went wrong' });
         }
@@ -64,6 +64,25 @@ const sendMail = (email, token, res,) => {
     }
     );
 };
+
+// sent reset password mail to user using nodemailer transporter
+function sendResetPasswordMail(email, token, res) {
+    const mailOptions = {
+        from: process.env.EMAIL,
+        to: email,
+        subject: 'Reset your password',
+        html: `<h1>Click on the link to reset your password</h1><br/> <p>${process.env.DOMAIN}/resetpassword/?token=${token}</p>`,
+    };
+    transporter.sendMail(mailOptions, (err, info) => {
+        if (err) {
+            res.status(400).json({ err: '2.something went wrong' });
+        }
+        if (info) {
+            res.send({ success: 'check your email to reset your password' });
+        }
+    }
+    );
+}
 
 
 
@@ -88,7 +107,7 @@ app.post('/signup', (req, res) => {
             }
             if (result.length > 0) {
                 if (result[0].isVerified === 0) {
-                    sendMail(email, token, res);
+                    sendVerificationMail(email, token, res);
                 } else {
                     res.status(400).json({ err: '2.something went wrong' });
                 }
@@ -99,12 +118,12 @@ app.post('/signup', (req, res) => {
                         res.status(400).json({ err: '3.something went wrong' });
                     }
                     if (result) {
-                        sendMail(email, token, res);
+                        sendVerificationMail(email, token, res);
                     }
                 });
             }
         });
-    }else{
+    } else {
         res.status(400).json({ err: '4.something went wrong' });
     }
 });
@@ -159,7 +178,7 @@ app.post('/login', (req, res) => {
             if (result.length > 0) {
                 if (result[0].isVerified === 0) {
                     const token = jwt.sign({ mail: email, username: result[0].username }, process.env.SECRET_KEY);
-                    sendMail(email, token, res);
+                    sendVerificationMail(email, token, res);
                 } else {
                     const isMatch = bcrypt.compareSync(password, result[0].password);
                     if (isMatch) {
@@ -179,7 +198,79 @@ app.post('/login', (req, res) => {
     }
 });
 
+//reset password
+// step1: create route resetpassword
+// step2: get email from body and add validation for email
+// step3: if email is not null then verify email exist in users table
+// step4: if email exist then verify isVerified column is 0 or 1 if 0 then send mail to user to verify account else send response as error
+// step5: if email does not exist then send response as error
+// step6: if email exist and isVerified column is 1 then create jwt token using email and send response as success
+// step7: if error send response as error
+// step8: if success sent reset password  mail with jwt token as parameter in href link to user email to reset password
+// step9: if error send response as error and success as successvod 
+// step10: avoid sql injection using ? in sql query and  avoid  * in sql query
 
+app.post('/forgotpassword', (req, res) => {
+    const { email } = req.body;
+    if (email && email !== null && email !== undefined && email !== '') {
+        connection.query('SELECT email FROM users WHERE email=?', [email], (err, result) => {
+            if (err) {
+                res.status(400).json({ err: '1.something went wrong' });
+            }
+            if (result.length > 0) {
+                if (result[0].isVerified === 0) {
+                    const token = jwt.sign({ mail: email }, process.env.SECRET_KEY);
+                    sendVerificationMail(email, token, res);
+                } else {
+                    const token = jwt.sign({ mail: email }, process.env.SECRET_KEY);
+                    sendResetPasswordMail(email, token, res);
+                }
+            }
+            if (result.length === 0) {
+                res.status(400).json({ err: '3.something went wrong' });
+            }
+        });
+    } else {
+        res.status(400).json({ err: '4.something went wrong' });
+    }
+});
+
+// route for reset password
+// step1: create route resetpassword
+// step2: get token,newPassword from body and add validation for token and password
+// step3: if token is not null then verify token using jwt verify method  else send response as error
+// step4: if success then send response as success
+// step5: if error send response as error
+// step6: get the mail from token 
+// step7: verify mail exist in users table
+// step8: if mail exsit then update password in users table
+// step9: if error send response as error
+// step10: avoid sql injection using ? in sql query and  avoid  * in sql query
+// step11: set status code for success as 200 and error as 400
+
+app.put('/resetpassword', (req, res) => {
+    const { token, newPassword } = req.body;
+    if (token && token !== null && token !== undefined && token !== '' && newPassword && newPassword !== null && newPassword !== undefined && newPassword !== '') {
+        const hash = bcrypt.hashSync(newPassword, 10);
+        jwt.verify(token, process.env.SECRET_KEY, (err, result) => {
+            if (err) {
+                res.status(400).json({ err: '1.something went wrong' });
+            }
+            if (result) {
+                connection.query('UPDATE users SET password=? WHERE email=?', [hash, result.mail], (err, result) => {
+                    if (err) {
+                        res.status(400).json({ err: '2.something went wrong' });
+                    }
+                    if (result) {
+                        res.status(200).json({ success: 'your password is reset' });
+                    }
+                });
+            }
+        });
+    } else {
+        res.status(400).json({ err: '3.something went wrong' });
+    }
+});
 
 
 //create listen port user port from .env file
